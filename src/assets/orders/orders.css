@@ -1,0 +1,152 @@
+/* Layout */
+.dashboard {
+  display: flex;
+  background: #f6f7fb;
+  min-height: 100vh;
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 25px;
+}
+
+/* Header */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+/* Buttons */
+.btn-primary {
+  background: #4f46e5;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+/* Table */
+.table-card {
+  background: white;
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,.08);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+th {
+  background: #f3f4f6;
+}
+
+.empty-text {
+  text-align: center;
+  padding: 20px;
+  color: gray;
+}
+
+/* Status */
+.status {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.status.pending { background: #fde68a; }
+.status.completed { background: #bbf7d0; }
+.status.cancelled { background: #fecaca; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+
+.modal {
+  background: white;
+  width: 520px;
+  border-radius: 12px;
+  padding: 15px;
+  animation: scale .2s ease-in-out;
+}
+
+@keyframes scale {
+  from { transform: scale(.9); opacity: 0 }
+  to { transform: scale(1); opacity: 1 }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.modal-body {
+  margin-top: 15px;
+}
+
+/* Create Order Rows */
+.order-row {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.order-row select,
+.order-row input {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+/* Buttons inside modal */
+.add-item-btn {
+  width: 100%;
+  padding: 8px;
+  background: #e5e7eb;
+  border: none;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.submit-order-btn {
+  width: 100%;
+  padding: 10px;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}

@@ -1,0 +1,37 @@
+.suppliers-container {
+  flex: 1;
+  padding: 20px;
+}
+
+.suppliers-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.suppliers-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.suppliers-table th,
+.suppliers-table td {
+  border: 1px solid #ddd;
+  padding: 10px;
+}
+
+.active {
+  color: green;
+  font-weight: 600;
+}
+
+.inactive {
+  color: red;
+  font-weight: 600;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

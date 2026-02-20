@@ -1,0 +1,65 @@
+.dashboard {
+  display: flex;
+  background: #f4f6f9;
+  min-height: 100vh;
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 30px;
+}
+
+.dashboard-title {
+  font-size: 26px;
+  font-weight: bold;
+  margin-bottom: 25px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.table-card {
+  background: #fff;
+  margin-top: 30px;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.table-card h3 {
+  margin-bottom: 15px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead {
+  background: #f2f2f2;
+}
+
+th,
+td {
+  padding: 12px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+}
+
+.stock-low {
+  color: red;
+  font-weight: bold;
+}
+
+.sold-qty {
+  font-weight: bold;
+}
+
+.empty-text {
+  text-align: center;
+  padding: 25px;
+  color: #888;
+}
