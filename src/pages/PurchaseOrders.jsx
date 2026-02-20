@@ -1,249 +1,337 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
-import useTenantData from "../hooks/useTenantData";
+import api from "../services/api";
+import "../assets/orders/orders.css";
 
 const PurchaseOrders = () => {
-  const data = useTenantData();
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
 
-  const [purchaseOrders, setPurchaseOrders] = useState(
-    data?.purchaseOrders || []
-  );
-
-  const [products, setProducts] = useState(data?.products || []);
   const [showModal, setShowModal] = useState(false);
-  const [cart, setCart] = useState([]);
-  const [selectedSupplier, setSelectedSupplier] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  if (!data) return <div>Tenant not found</div>;
+  const [supplier, setSupplier] = useState("");
+  const [items, setItems] = useState([
+    { product: "", variantId: "", quantity: 1, price: 0 }
+  ]);
 
-  const allVariants = products.flatMap((p) =>
-    p.variants.map((v) => ({
-      ...v,
-      productName: p.name
-    }))
-  );
+  const headers = {
+    authorization: `Bearer ${localStorage.getItem("token")}`,
+    tenant: localStorage.getItem("tenant")
+  };
 
-  const addItem = (sku) => {
-    const variant = allVariants.find((v) => v.sku === sku);
-    if (!variant) return;
+  /* ===============================
+     INITIAL LOAD
+  =============================== */
+  useEffect(() => {
+    fetchPurchaseOrders();
+    fetchProducts();
+    fetchSuppliers();
+  }, []);
 
-    const exists = cart.find((item) => item.sku === sku);
-
-    if (exists) {
-      setCart(
-        cart.map((item) =>
-          item.sku === sku
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        )
-      );
-    } else {
-      setCart([
-        ...cart,
-        {
-          sku: variant.sku,
-          productName: variant.productName,
-          quantity: 1,
-          cost: variant.price * 0.7 // assume supplier cost
-        }
-      ]);
+  /* ===============================
+     FETCH PURCHASE ORDERS
+  =============================== */
+  const fetchPurchaseOrders = async () => {
+    try {
+      const res = await api.get("/api/purchase-orders", { headers });
+      if (res.data.success) {
+        setPurchaseOrders(res.data.purchaseOrders);
+      }
+    } catch (err) {
+      console.error("Error fetching purchase orders:", err);
     }
   };
 
-  const createPO = () => {
-    const newPO = {
-      id: Date.now(),
-      supplierId: selectedSupplier,
-      status: "Draft",
-      items: cart,
-      expectedDate: new Date().toISOString().split("T")[0]
+  /* ===============================
+     FETCH PRODUCTS
+  =============================== */
+  const fetchProducts = async () => {
+    try {
+      const res = await api.get("/api/products", { headers });
+      if (res.data.success) {
+        setProducts(res.data.products);
+      }
+    } catch (err) {
+      console.error("Error fetching products:", err);
+    }
+  };
+
+  /* ===============================
+     FETCH SUPPLIERS
+  =============================== */
+  const fetchSuppliers = async () => {
+    try {
+      const res = await api.get("/api/suppliers", { headers });
+      if (res.data.success) {
+        setSuppliers(res.data.suppliers);
+      }
+    } catch (err) {
+      console.error("Error fetching suppliers:", err);
+    }
+  };
+
+  /* ===============================
+     ADD ITEM ROW
+  =============================== */
+  const addRow = () => {
+    setItems([
+      ...items,
+      { product: "", variantId: "", quantity: 1, price: 0 }
+    ]);
+  };
+
+  /* ===============================
+     UPDATE ITEM FIELD
+  =============================== */
+  const updateItem = (index, key, value) => {
+    const updated = [...items];
+    updated[index][key] = value;
+    setItems(updated);
+  };
+
+  /* ===============================
+     CREATE PURCHASE ORDER
+  =============================== */
+  const submit = async () => {
+    if (!supplier) return alert("Please select a supplier");
+
+    for (const item of items) {
+      if (
+        !item.product ||
+        !item.variantId ||
+        !item.quantity ||
+        !item.price
+      ) {
+        return alert("Please complete all item fields");
+      }
+    }
+
+    const formattedItems = items.map((item) => ({
+      product: item.product,
+      variantId: item.variantId,
+      quantityOrdered: item.quantity,
+      quantityReceived: 0,
+      price: item.price
+    }));
+
+    const totalAmount = formattedItems.reduce(
+      (sum, i) => sum + i.quantityOrdered * i.price,
+      0
+    );
+
+    const payload = {
+      supplier,
+      items: formattedItems,
+      status: "confirmed",
+      totalAmount
     };
 
-    setPurchaseOrders([...purchaseOrders, newPO]);
-    setCart([]);
-    setSelectedSupplier("");
-    setShowModal(false);
+    try {
+      setLoading(true);
+
+      const res = await api.post(
+        "/api/purchase-orders",
+        payload,
+        { headers }
+      );
+
+      if (res.data.success) {
+        setShowModal(false);
+        setSupplier("");
+        setItems([
+          { product: "", variantId: "", quantity: 1, price: 0 }
+        ]);
+        fetchPurchaseOrders();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Error creating purchase order");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateStatus = (id, status) => {
-    setPurchaseOrders(
-      purchaseOrders.map((po) =>
-        po.id === id ? { ...po, status } : po
-      )
-    );
-  };
+  /* ===============================
+     RECEIVE PURCHASE ORDER
+  =============================== */
+  const receivePO = async (po) => {
+    if (!window.confirm("Receive this Purchase Order?")) return;
 
-  const receiveStock = (po) => {
-    if (po.status !== "Confirmed") return;
+    const receiveItems = po.items.map((item) => ({
+      variantId: item.variantId,
+      quantity: item.quantityOrdered - item.quantityReceived
+    }));
 
-    const updatedProducts = products.map((product) => {
-      const updatedVariants = product.variants.map((variant) => {
-        const poItem = po.items.find(
-          (item) => item.sku === variant.sku
-        );
+    try {
+      await api.patch(
+        `/api/purchase-orders/${po._id}/receive`,
+        { items: receiveItems },
+        { headers }
+      );
 
-        if (poItem) {
-          return {
-            ...variant,
-            stock: variant.stock + poItem.quantity
-          };
-        }
-
-        return variant;
-      });
-
-      return { ...product, variants: updatedVariants };
-    });
-
-    setProducts(updatedProducts);
-
-    updateStatus(po.id, "Received");
+      fetchPurchaseOrders();
+    } catch (err) {
+      alert(err.response?.data?.message || "Error receiving purchase order");
+    }
   };
 
   return (
-    <div className="flex">
+    <div className="dashboard">
       <Sidebar />
 
-      <div className="flex-1 p-8 bg-gray-100 min-h-screen">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">
-            Purchase Orders
-          </h2>
-
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded"
-          >
-            + Create PO
+      <div className="dashboard-content">
+        <div className="page-header">
+          <h2>Purchase Orders</h2>
+          <button className="btn-primary" onClick={() => setShowModal(true)}>
+            + New Purchase Order
           </button>
         </div>
 
-        {/* PO Table */}
-        <div className="bg-white p-4 rounded-xl shadow">
-          <table className="w-full text-sm">
+        <div className="table-card">
+          <table>
             <thead>
-              <tr className="text-left text-gray-500">
+              <tr>
                 <th>ID</th>
+                <th>Supplier</th>
                 <th>Status</th>
-                <th>Items</th>
-                <th>Expected</th>
-                <th>Actions</th>
+                <th>Total Items</th>
+                <th>Total Amount</th>
+                <th>Date</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {purchaseOrders.map((po) => (
-                <tr key={po.id} className="border-t">
-                  <td>{po.id}</td>
-                  <td>{po.status}</td>
-                  <td>{po.items.length}</td>
-                  <td>{po.expectedDate}</td>
-                  <td className="flex gap-2">
-                    {po.status === "Draft" && (
-                      <button
-                        onClick={() =>
-                          updateStatus(po.id, "Sent")
-                        }
-                        className="text-blue-600"
-                      >
-                        Send
-                      </button>
-                    )}
-
-                    {po.status === "Sent" && (
-                      <button
-                        onClick={() =>
-                          updateStatus(po.id, "Confirmed")
-                        }
-                        className="text-green-600"
-                      >
-                        Confirm
-                      </button>
-                    )}
-
-                    {po.status === "Confirmed" && (
-                      <button
-                        onClick={() => receiveStock(po)}
-                        className="text-purple-600"
-                      >
-                        Receive
-                      </button>
-                    )}
+              {purchaseOrders.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="empty-text">
+                    No Purchase Orders Found
                   </td>
                 </tr>
-              ))}
+              ) : (
+                purchaseOrders.map((po) => (
+                  <tr key={po._id}>
+                    <td>{po._id.slice(-6)}</td>
+                    <td>{po.supplier?.name || "-"}</td>
+                    <td>
+                      <span className={`status ${po.status}`}>
+                        {po.status}
+                      </span>
+                    </td>
+                    <td>{po.items?.length}</td>
+                    <td>₹ {po.totalAmount?.toFixed(2)}</td>
+                    <td>
+                      {new Date(po.createdAt).toLocaleDateString()}
+                    </td>
+                    <td>
+                      {po.status !== "received" && (
+                        <button
+                          className="btn-success"
+                          onClick={() => receivePO(po)}
+                        >
+                          Receive
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
+      </div>
 
-        {/* Create PO Modal */}
-        {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center">
-            <div className="bg-white w-[600px] p-6 rounded-xl shadow">
-              <h3 className="text-xl font-bold mb-4">
-                Create Purchase Order
-              </h3>
+      {showModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>Create Purchase Order</h3>
+              <button onClick={() => setShowModal(false)}>✕</button>
+            </div>
 
+            <div className="modal-body">
               <select
-                onChange={(e) =>
-                  setSelectedSupplier(e.target.value)
-                }
-                className="w-full p-2 border rounded mb-4"
+                value={supplier}
+                onChange={(e) => setSupplier(e.target.value)}
               >
                 <option value="">Select Supplier</option>
-                {data.suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
+                {suppliers.map((s) => (
+                  <option key={s._id} value={s._id}>
                     {s.name}
                   </option>
                 ))}
               </select>
 
-              <select
-                onChange={(e) => addItem(e.target.value)}
-                className="w-full p-2 border rounded mb-4"
-              >
-                <option value="">Add SKU</option>
-                {allVariants.map((v) => (
-                  <option key={v.sku} value={v.sku}>
-                    {v.productName} - {v.sku}
-                  </option>
-                ))}
-              </select>
-
-              <div className="mb-4">
-                {cart.map((item) => (
-                  <div
-                    key={item.sku}
-                    className="flex justify-between text-sm mb-2"
+              {items.map((item, i) => (
+                <div className="order-row" key={i}>
+                  <select
+                    value={item.product}
+                    onChange={(e) =>
+                      updateItem(i, "product", e.target.value)
+                    }
                   >
-                    <span>
-                      {item.sku} x {item.quantity}
-                    </span>
-                    <span>
-                      ${item.cost * item.quantity}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                    <option value="">Select Product</option>
+                    {products.map((p) => (
+                      <option key={p._id} value={p._id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
 
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border rounded"
-                >
-                  Cancel
-                </button>
+                  <select
+                    value={item.variantId}
+                    onChange={(e) =>
+                      updateItem(i, "variantId", e.target.value)
+                    }
+                    disabled={!item.product}
+                  >
+                    <option value="">Select Variant</option>
+                    {products
+                      .find((p) => p._id === item.product)
+                      ?.variants?.map((v) => (
+                        <option key={v._id} value={v._id}>
+                          {v.sku}
+                        </option>
+                      ))}
+                  </select>
 
-                <button
-                  onClick={createPO}
-                  className="px-4 py-2 bg-blue-600 text-white rounded"
-                >
-                  Create
-                </button>
-              </div>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Qty"
+                    value={item.quantity}
+                    onChange={(e) =>
+                      updateItem(i, "quantity", Number(e.target.value))
+                    }
+                  />
+
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Price"
+                    value={item.price}
+                    onChange={(e) =>
+                      updateItem(i, "price", Number(e.target.value))
+                    }
+                  />
+                </div>
+              ))}
+
+              <button className="add-item-btn" onClick={addRow}>
+                + Add Item
+              </button>
+
+              <button
+                className="submit-order-btn"
+                onClick={submit}
+                disabled={loading}
+              >
+                {loading ? "Processing..." : "Create Purchase Order"}
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

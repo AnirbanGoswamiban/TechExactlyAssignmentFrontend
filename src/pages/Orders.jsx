@@ -4,11 +4,13 @@ import api from "../services/api";
 import "../assets/orders/orders.css";
 
 const Orders = () => {
-  const [orders, setOrders] = useState([]);
+  const [movements, setMovements] = useState([]);
   const [products, setProducts] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const [items, setItems] = useState([
-    { product: "", variantId: "", quantity: 1 }
+    { product: "", variantId: "", quantity: 1, type: "sale" }
   ]);
 
   const headers = {
@@ -17,28 +19,37 @@ const Orders = () => {
   };
 
   useEffect(() => {
-    fetchOrders();
+    fetchMovements();
     fetchProducts();
   }, []);
 
-  const fetchOrders = async () => {
-    const res = await api.get("/api/orders", { headers });
-    if (res.data.success) setOrders(res.data.order);
+  const fetchMovements = async () => {
+    try {
+      const res = await api.get("/api/orders", { headers });
+      if (res.data.success) {
+        setMovements(res.data.order);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const fetchProducts = async () => {
-    const res = await api.get("/api/products", { headers });
-    if (res.data.success) setProducts(res.data.products);
-  };
-
-  const cancelOrder = async (id) => {
-    if (!window.confirm("Cancel this order?")) return;
-    await api.patch(`/api/orders/${id}/cancel`, {}, { headers });
-    fetchOrders();
+    try {
+      const res = await api.get("/api/products", { headers });
+      if (res.data.success) {
+        setProducts(res.data.products);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const addRow = () => {
-    setItems([...items, { product: "", variantId: "", quantity: 1,type:'sales' }]);
+    setItems([
+      ...items,
+      { product: "", variantId: "", quantity: 1, type: "sale" }
+    ]);
   };
 
   const updateItem = (index, key, value) => {
@@ -50,16 +61,47 @@ const Orders = () => {
   const submit = async () => {
     for (const item of items) {
       if (!item.product || !item.variantId || !item.quantity) {
-        return alert("Please select product, variant and quantity");
+        return alert("Please fill all fields");
       }
     }
 
-    const res = await api.post("/api/orders", { items }, { headers });
+    const formattedItems = items.map((i) => ({
+      productId: i.product,
+      variantId: i.variantId,
+      quantity: i.quantity,
+      type: i.type
+    }));
 
-    if (res.data.success) {
-      setShowModal(false);
-      setItems([{ product: "", variantId: "", quantity: 1 }]);
-      fetchOrders();
+    try {
+      setLoading(true);
+      const res = await api.post(
+        "/api/orders",
+        { items: formattedItems },
+        { headers }
+      );
+
+      if (res.data.success) {
+        setShowModal(false);
+        setItems([
+          { product: "", variantId: "", quantity: 1, type: "sale" }
+        ]);
+        fetchMovements();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Error creating movement");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reverseMovement = async (id) => {
+    if (!window.confirm("Reverse this movement?")) return;
+
+    try {
+      await api.patch(`/api/orders/${id}/cancel`, {}, { headers });
+      fetchMovements();
+    } catch (err) {
+      alert(err.response?.data?.message || "Error reversing movement");
     }
   };
 
@@ -69,9 +111,9 @@ const Orders = () => {
 
       <div className="dashboard-content">
         <div className="page-header">
-          <h2>Orders</h2>
+          <h2>Stock Movements</h2>
           <button className="btn-primary" onClick={() => setShowModal(true)}>
-            + Create Order
+            + New Movement
           </button>
         </div>
 
@@ -79,40 +121,46 @@ const Orders = () => {
           <table>
             <thead>
               <tr>
-                <th>Order ID</th>
-                <th>Items</th>
-                <th>Status</th>
+                <th>ID</th>
+                <th>Product</th>
+                <th>Type</th>
+                <th>Qty</th>
+                <th>Previous</th>
+                <th>New</th>
                 <th>Date</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {orders.length === 0 ? (
+              {movements.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="empty-text">
-                    No orders found
+                  <td colSpan="8" className="empty-text">
+                    No movements found
                   </td>
                 </tr>
               ) : (
-                orders.map((o) => (
-                  <tr key={o._id}>
-                    <td>{o._id.slice(-6)}</td>
-                    <td>{o.items.length}</td>
+                movements.map((m) => (
+                  <tr key={m._id}>
+                    <td>{m._id.slice(-6)}</td>
+                    <td>{m.product?.name || "-"}</td>
                     <td>
-                      <span className={`status ${o.status}`}>
-                        {o.status}
+                      <span className={`status ${m.type}`}>
+                        {m.type}
                       </span>
                     </td>
+                    <td>{m.quantity}</td>
+                    <td>{m.previousStock}</td>
+                    <td>{m.newStock}</td>
                     <td>
-                      {new Date(o.createdAt).toLocaleDateString()}
+                      {new Date(m.createdAt).toLocaleDateString()}
                     </td>
                     <td>
-                      {o.status === "pending" && (
+                      {(m.type === "sale" || m.type === "purchase") && (
                         <button
                           className="btn-danger"
-                          onClick={() => cancelOrder(o._id)}
+                          onClick={() => reverseMovement(m._id)}
                         >
-                          Cancel
+                          Reverse
                         </button>
                       )}
                     </td>
@@ -124,18 +172,18 @@ const Orders = () => {
         </div>
       </div>
 
-      {/* Create Order Modal */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>Create Order</h3>
+              <h3>Create Stock Movement</h3>
               <button onClick={() => setShowModal(false)}>✕</button>
             </div>
 
             <div className="modal-body">
               {items.map((item, i) => (
                 <div className="order-row" key={i}>
+
                   <select
                     value={item.product}
                     onChange={(e) =>
@@ -150,25 +198,6 @@ const Orders = () => {
                     ))}
                   </select>
 
-                  {/* <select
-                    value={item.variantId}
-                    onChange={(e) =>
-                      updateItem(i, "variantId", e.target.value)
-                    }
-                    disabled={!item.product}
-                  >
-                    <option value="">Select Variant</option>
-
-                    {products
-                      .find((p) => p._id === item.product)
-                      ?.variants?.map((v) => (
-                        <option key={v._id} value={v._id}>
-                          {v.sku ||
-                            `${v.attributes?.size || ""} ${v.attributes?.color || ""}`}
-                        </option>
-                      ))}
-                  </select> */}
-
                   <select
                     value={item.variantId}
                     onChange={(e) =>
@@ -177,17 +206,24 @@ const Orders = () => {
                     disabled={!item.product}
                   >
                     <option value="">Select Variant</option>
-
                     {products
                       .find((p) => p._id === item.product)
                       ?.variants?.map((v) => (
                         <option key={v._id} value={v._id}>
-                          {v.sku} — {v.attributes.size} / {v.attributes.color}
+                          {v.sku} — {v.attributes?.size} / {v.attributes?.color}
                         </option>
                       ))}
                   </select>
 
-
+                  <select
+                    value={item.type}
+                    onChange={(e) =>
+                      updateItem(i, "type", e.target.value)
+                    }
+                  >
+                    <option value="sale">Sale</option>
+                    <option value="purchase">Purchase</option>
+                  </select>
 
                   <input
                     type="number"
@@ -204,8 +240,12 @@ const Orders = () => {
                 + Add Item
               </button>
 
-              <button className="submit-order-btn" onClick={submit}>
-                Create Order
+              <button
+                className="submit-order-btn"
+                onClick={submit}
+                disabled={loading}
+              >
+                {loading ? "Processing..." : "Create Movement"}
               </button>
             </div>
           </div>
